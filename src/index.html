@@ -171,28 +171,21 @@
     text-align: center; color: #6b6f82; padding: 2.5rem; font-size: .9rem;
   }
 
-  /* Startup overlay */
-  #loadingOverlay {
-    position: fixed; inset: 0; z-index: 1000; background: #0f1117;
-    display: flex; flex-direction: column; align-items: center;
-    justify-content: center; gap: 1.2rem; transition: opacity .35s ease;
+  /* Drag-and-drop overlay */
+  #dropOverlay {
+    position: fixed; inset: .75rem; z-index: 1000;
+    border: 3px dashed #e8453c; border-radius: 16px;
+    background: rgba(15,17,23,.88);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem; font-weight: 600; color: #fff;
+    opacity: 0; pointer-events: none; transition: opacity .15s;
   }
-  #loadingOverlay.hidden { opacity: 0; pointer-events: none; }
-  #loadingOverlay .spinner {
-    width: 44px; height: 44px;
-    border: 4px solid #2a2d3a; border-top-color: #e8453c;
-    border-radius: 50%; animation: spin .8s linear infinite;
-  }
-  #loadingOverlay .loading-text { color: #8b8fa3; font-size: .95rem; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  #dropOverlay.show { opacity: 1; }
 </style>
 </head>
 <body>
 
-<div id="loadingOverlay">
-  <div class="spinner"></div>
-  <div class="loading-text">Loading MP3 &amp; SRT Maker…</div>
-</div>
+<div id="dropOverlay">🎬 Drop videos to add them</div>
 
 <div class="header">
   <img src="icon.png" alt="Logo">
@@ -223,14 +216,22 @@
     </thead>
     <tbody id="rows"></tbody>
   </table>
-  <div class="empty" id="emptyRow">No files yet — click <strong>Add Files</strong> to queue videos.</div>
+  <div class="empty" id="emptyRow">No files yet — click <strong>Add Files</strong> or drag videos here.</div>
 </div>
 
 <script>
+// Tauri bridge (withGlobalTauri: true exposes these on window.__TAURI__).
+const { invoke } = window.__TAURI__.core;
+const { listen } = window.__TAURI__.event;
+const { open } = window.__TAURI__.dialog;
+const { getCurrentWebview } = window.__TAURI__.webview;
+
+const VIDEO_EXTS = ["mp4", "mov", "avi", "mkv", "webm"];
+
 const MODEL_OPTS = `
-  <option value="tiny">tiny (39 MB)</option>
-  <option value="base">base (74 MB)</option>
-  <option value="small">small (244 MB)</option>
+  <option value="tiny">tiny (75 MB)</option>
+  <option value="base">base (142 MB)</option>
+  <option value="small">small (466 MB)</option>
   <option value="medium" selected>medium (1.5 GB)</option>
   <option value="large-v3">large-v3 (3 GB)</option>`;
 
@@ -279,9 +280,29 @@ function updateCount() {
 
 // --- add files (multi-select) ---
 async function addFiles() {
-  const paths = await window.pywebview.api.pick_videos();
+  const paths = await open({
+    multiple: true,
+    filters: [{ name: "Video Files", extensions: VIDEO_EXTS }],
+  });
   (paths || []).forEach(addRow);
 }
+
+// --- drag & drop from Finder / Explorer ---
+const isVideo = p => VIDEO_EXTS.includes(p.split(".").pop().toLowerCase());
+const dropOverlay = document.getElementById("dropOverlay");
+
+getCurrentWebview().onDragDropEvent(e => {
+  const { type, paths } = e.payload;
+  if (type === "enter") {
+    dropOverlay.classList.toggle("show", (paths || []).some(isVideo));
+  } else if (type === "drop") {
+    dropOverlay.classList.remove("show");
+    const queued = new Set([...rowsEl.children].map(tr => tr.dataset.video));
+    paths.filter(p => isVideo(p) && !queued.has(p)).forEach(addRow);
+  } else if (type === "leave") {
+    dropOverlay.classList.remove("show");
+  }
+});
 
 function addRow(videoPath) {
   const id = "job" + (++jobSeq);
@@ -345,7 +366,7 @@ function wireRow(tr, id) {
   // Output dir picker
   browse.addEventListener("click", async () => {
     if (tr.dataset.state === "processing") return;
-    const path = await window.pywebview.api.pick_directory();
+    const path = await open({ directory: true });
     if (path) { outText.textContent = path; outText.title = path; }
   });
 
@@ -371,7 +392,7 @@ function wireRow(tr, id) {
     const st = tr.dataset.state;
     if (st === "processing") {
       tr.querySelector(".mini-text").textContent = "Stopping…";
-      window.pywebview.api.stop_job(id);
+      invoke("stop_job", { jobId: id });
     } else if (st !== "done") {
       startRow(tr, id);
     }
@@ -379,7 +400,7 @@ function wireRow(tr, id) {
 
   // Remove from list (optionally stop if running). Never deletes files.
   remove.addEventListener("click", () => {
-    if (tr.dataset.state === "processing") window.pywebview.api.stop_job(id);
+    if (tr.dataset.state === "processing") invoke("stop_job", { jobId: id });
     tr.remove();
     updateCount();
     updateBatchBtn();
@@ -438,8 +459,11 @@ async function startRow(tr, id) {
   const text = tr.querySelector(".mini-text");
   text.className = "mini-text"; text.textContent = "Starting…";
 
-  await window.pywebview.api.start_job(id, video, outdir, model, lang,
-                                       srt, mp3, folder, move);
+  await invoke("start_job", { args: {
+    jobId: id, videoPath: video, outputDir: outdir, modelName: model,
+    language: lang, createSrt: srt, createMp3: mp3,
+    newFolder: folder, moveVideo: move,
+  }});
 }
 
 // Start a row and resolve once it finishes (done / error / stopped).
@@ -475,13 +499,14 @@ async function batchRun() {
 // Stage colors for the per-row bar.
 const STAGE_COLORS = {
   extracting:   "linear-gradient(90deg, #ec4899, #a855f7)",
+  downloading:  "linear-gradient(90deg, #2563eb, #a855f7)",
   loading:      "linear-gradient(90deg, #e8453c, #f2845a)",
   transcribing: "linear-gradient(90deg, #e8453c, #f2845a)",
   writing:      "linear-gradient(90deg, #e8453c, #f2845a)",
   moving:       "linear-gradient(90deg, #2563eb, #14b8a6)",
 };
 
-// Called from Python with progress for a specific job_id.
+// Called from Rust (via the "progress" event) for a specific job_id.
 function onProgress(msg) {
   const tr = document.getElementById(msg.job_id);
   if (!tr) return;  // row was removed — ignore stray updates
@@ -524,20 +549,11 @@ function onProgress(msg) {
   }
 }
 
+listen("progress", e => onProgress(e.payload));
 document.getElementById("addBtn").addEventListener("click", addFiles);
 batchBtn.addEventListener("click", batchRun);
 updateCount();
 updateBatchBtn();
-
-// Dismiss the startup overlay once pywebview's API bridge is ready.
-(function() {
-  function ready() {
-    const o = document.getElementById("loadingOverlay");
-    if (o) o.classList.add("hidden");
-  }
-  if (window.pywebview && window.pywebview.api) ready();
-  else window.addEventListener("pywebviewready", ready);
-})();
 </script>
 </body>
 </html>
