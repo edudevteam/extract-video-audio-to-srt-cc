@@ -1,0 +1,27 @@
+[package]
+name = "mp3-srt-maker"
+version = "2.0.0"
+description = "Batch-create MP3 audio and SRT captions from video files using Whisper"
+edition = "2021"
+
+[lib]
+name = "mp3_srt_maker_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+whisper-rs = "0.15"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+whisper-rs = { version = "0.15", features = ["metal"] }
+
+# whisper.cpp is unusably slow unoptimized; build it in release even for `tauri dev`.
+[profile.dev.package.whisper-rs-sys]
+opt-level = 3

@@ -5,3 +5,6 @@ _claude
 __pycache__/
 *.pyc
 .DS_Store
+# Tauri
+src-tauri/target
+src-tauri/gen
