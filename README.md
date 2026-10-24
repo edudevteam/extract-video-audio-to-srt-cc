@@ -1,5 +1,7 @@
 <h1><img src="icon.png" style="width: 30px"> MP3 &amp; SRT Maker</h1>
 
+![MP3 &amp; SRT Maker Screenshot](./app-screenshot.png)
+
 Turn videos into captions (subtitles) on your own computer. Add some videos,
 press a button, and it makes a **.srt** caption file you can upload to YouTube.
 It can also save an **.mp3** of the sound. Great for YouTube Shorts.
