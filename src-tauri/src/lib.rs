@@ -152,9 +152,16 @@ impl Job {
     }
 }
 
-/// GUI apps on macOS don't inherit the shell PATH, so look in the usual
+/// Prefer the ffmpeg sidecar Tauri places next to the app executable. Failing
+/// that, GUI apps on macOS don't inherit the shell PATH, so look in the usual
 /// Homebrew locations before falling back to plain `ffmpeg`.
 fn ffmpeg_path() -> PathBuf {
+    let sidecar = std::env::current_exe()
+        .ok()
+        .and_then(|exe| Some(exe.parent()?.join(format!("ffmpeg{}", std::env::consts::EXE_SUFFIX))));
+    if let Some(p) = sidecar.filter(|p| p.is_file()) {
+        return p;
+    }
     for p in ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/usr/bin/ffmpeg"] {
         if Path::new(p).is_file() {
             return PathBuf::from(p);

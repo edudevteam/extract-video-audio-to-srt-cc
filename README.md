@@ -26,17 +26,19 @@ leave your computer. The app is built with [Tauri](https://tauri.app) and Rust.
 
 ## Setup — do this **once**
 
-### Step 1 — Install ffmpeg
+> **Just want to use the app?** If someone gave you the built app (`.app` or
+> `.dmg`), you don't need any of this. ffmpeg is already inside it. Copy it to
+> your Applications folder and open it. The first time, **right-click** it →
+> **Open** → **Open**.
 
-ffmpeg is a helper that reads the sound out of videos.
+### Step 1 — ffmpeg (automatic)
 
-| Your computer | Type this in the Terminal |
-| ------------- | ------------------------- |
-| **Mac**       | `brew install ffmpeg`     |
-| **Windows**   | `winget install ffmpeg`   |
-| **Linux**     | `sudo apt install ffmpeg` |
+ffmpeg is a helper that reads the sound out of videos. You don't need to
+install it. `pnpm dev` and `pnpm build` download a copy into
+`src-tauri/binaries/` the first time (about 66 MB), and the built app includes it.
 
-> On a Mac, if `brew` doesn't work, install Homebrew first from **https://brew.sh**.
+> Automatic download works on Mac and Linux. On Windows, put `ffmpeg.exe` at
+> `src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe` yourself.
 
 ### Step 2 — Install the build tools
 
@@ -76,7 +78,9 @@ pnpm build
 ```
 
 The finished app ends up in `src-tauri/target/release/bundle/`
-(a `.app` / `.dmg` on Mac, an installer on Windows).
+(a `.app` / `.dmg` on Mac, an installer on Windows). It's self-contained:
+copy just that `.app` or `.dmg` to another computer of the same kind
+(Mac builds need macOS 11 or newer).
 
 > **Whisper models download on first use.** The first time you pick a model,
 > the app downloads it (the default `medium` is about 1.5 GB). It's saved, so
@@ -115,6 +119,7 @@ Models are stored in the app's data folder
 
 ## Help! Something went wrong
 
-- **"ffmpeg not found"** — do Step 1 above.
+- **"ffmpeg not found"** — run `pnpm fetch-ffmpeg`, or install it yourself
+  (`brew install ffmpeg` on Mac).
 - **The build fails mentioning cmake** — install CMake (Step 2).
 - **It's slow** — that's normal for big models. Try the `tiny` or `base` model.

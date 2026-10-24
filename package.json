@@ -4,8 +4,9 @@
   "version": "2.0.0",
   "scripts": {
     "tauri": "tauri",
-    "dev": "tauri dev",
-    "build": "tauri build"
+    "fetch-ffmpeg": "sh scripts/fetch-ffmpeg.sh",
+    "dev": "sh scripts/fetch-ffmpeg.sh && tauri dev",
+    "build": "sh scripts/fetch-ffmpeg.sh && tauri build"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"
